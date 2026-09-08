@@ -1,0 +1,31 @@
+# Local dependencies and Python environments
+/vendor/
+/tcl/
+/.venv/
+/venv/
+
+# Build output and release packages (upload to GitHub Releases)
+/build/
+/dist/
+/release/
+/*.zip
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Generated verification output
+*.log
+/preview.png
+/help-preview.png
+
+# Local settings and operating system files
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+Desktop.ini
