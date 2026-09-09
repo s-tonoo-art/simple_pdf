@@ -2,12 +2,25 @@ import hashlib
 import tempfile
 import unittest
 import time
+import os
 from pathlib import Path
 from PIL import Image
 from pypdf import PdfWriter, PdfReader
 from engine import merge, split, rotate
 
 class Operations(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get('SIMPLEPDF_QA_RAW'), '実データ検証は明示指定時のみ')
+    def test_actual_files(self):
+        from ordering import order_diagrams
+        from engine import reader
+        folder = Path(os.environ['SIMPLEPDF_QA_RAW'])
+        paths = order_diagrams(list(folder.glob('*.pdf')) + list(folder.glob('*.svg')))
+        expected = sum(len(reader(p).pages) if p.suffix.lower() == '.pdf' else 1 for p in paths)
+        output = folder.parent / 'simple_pdf' / 'qa' / '実データ結合確認.pdf'
+        output.parent.mkdir(exist_ok=True)
+        merge(paths, output)
+        self.assertEqual(len(PdfReader(output).pages), expected)
+
     def test_diagram_order(self):
         from ordering import order_diagrams
         paths = ['1_表紙.pdf', '2_目次.pdf', '空中線系統図(A)_10.svg', 'その他.pdf', 'ケーブル系統図(A)_2.svg', 'システム系統図(A)_2.svg', '空中線系統図(A)_2.svg', 'システム系統図(A)_1.svg', '末尾.pdf']

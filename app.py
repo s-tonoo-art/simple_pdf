@@ -29,11 +29,11 @@ PDF・SVG・JPEG・PNG・BMP・TIFF・WebPに対応しています。
 
 1ページずつ分解
 一覧からPDFを1つ選択し「1ページずつ分解」を押します。
-保存先に新しい専用フォルダーを作り、各ページを保存します。
+参照PDFと同じ場所に専用フォルダーを作り、各ページを保存します。
 
 回転
 一覧からPDFを1つ選択し、右90°・左90°・180°を選びます。
-全ページを回転し、別名で保存します。
+全ページを回転し、参照PDFと同じ場所へ別名で自動保存します。
 
 ページ数
 PDFのページ数を自動表示します。「確認中」は読み込み中、
@@ -42,10 +42,16 @@ PDFのページ数を自動表示します。「確認中」は読み込み中�
 
 ショートカット
 Ctrl+O：追加 ／ 一覧でCtrl+A：全選択 ／ Delete：除外
+Alt+J：結合 ／ Alt+S：分解
 F1：使い方 ／ この画面でEsc：閉じる
 
 保存・変換について
+処理が正常に完了すると一覧を空にします。失敗時は一覧を残します。
 出力はPDFです。元ファイルと同じ名前・場所には保存できません。
+保存先ダイアログは表示しません。結合結果は一覧の最初のPDFと
+同じフォルダーへ「元の名前_結合.pdf」で保存します。
+PDFがない場合は最初の画像と同じフォルダーへ保存します。
+同名ファイルがある場合は連番を付けます。
 画像の透過部分は白背景になります。
 複雑なSVGの効果やフォントは、元と異なる場合があります。
 パスワード入力が必要なPDFには対応していません。
@@ -91,6 +97,10 @@ class App:
         self.tree.bind('<Delete>', lambda e: self.remove())
         self.tree.bind('<Control-a>', lambda e: self.select_all())
         root.bind('<Control-o>', lambda e: self.add_dialog())
+        root.bind('<Alt-j>', lambda e: self.do_merge())
+        root.bind('<Alt-J>', lambda e: self.do_merge())
+        root.bind('<Alt-s>', lambda e: self.do_split())
+        root.bind('<Alt-S>', lambda e: self.do_split())
         bottom = ttk.Frame(root, padding=8)
         bottom.pack(fill='x')
         for title, command in [('上に', lambda: self.move(-1)), ('下に', lambda: self.move(1)), ('除外', self.remove), ('全選択', self.select_all), ('クリア', self.clear)]:
@@ -225,30 +235,39 @@ class App:
             return None
         return self.paths[selected[0]]
 
-    def output(self, name):
-        return filedialog.asksaveasfilename(title='別名で保存', initialfile=name, defaultextension='.pdf', filetypes=[('PDF', '*.pdf')])
+    def output(self, reference, suffix):
+        reference = Path(reference)
+        destination = reference.with_name(reference.stem + suffix + '.pdf')
+        number = 2
+        while destination.exists():
+            destination = reference.with_name(f'{reference.stem}{suffix}_{number}.pdf')
+            number += 1
+        return str(destination)
 
     def do_merge(self):
+        if self.busy:
+            return
         paths = [self.paths[i] for i in self.tree.get_children()]
         if not paths:
             messagebox.showinfo('ファイルを追加', 'PDFまたは画像を追加してください。')
             return
-        dest = self.output('結合.pdf')
+        reference = next((p for p in paths if Path(p).suffix.lower() == '.pdf'), paths[0])
+        dest = self.output(reference, '_結合')
         bookmarks = self.bookmarks.get()
         if dest:
             self.run(lambda: (merge(paths, dest, bookmarks), dest)[1])
 
     def do_split(self):
+        if self.busy:
+            return
         path = self.pdf_selection()
         if path:
-            directory = filedialog.askdirectory(title='分解ファイルの保存先（専用フォルダーを作成）')
-            if directory:
-                self.run(lambda: split(path, directory))
+            self.run(lambda: split(path, Path(path).parent))
 
     def do_rotate(self, angle):
         path = self.pdf_selection()
         if path:
-            dest = self.output(Path(path).stem + '_回転.pdf')
+            dest = self.output(path, '_回転')
             if dest:
                 self.run(lambda: (rotate(path, dest, angle), dest)[1])
 
@@ -271,10 +290,12 @@ class App:
             self.busy = False
             for button in self.buttons + [self.check]:
                 button.configure(state='normal')
-            self.status.set('保存しました：' + result if ok else '処理に失敗しました')
             if ok:
+                self.clear()
+                self.status.set('保存しました：' + result)
                 messagebox.showinfo('完了', '保存しました。\n\n' + result)
             else:
+                self.status.set('処理に失敗しました')
                 messagebox.showerror('処理できませんでした', result)
         except queue.Empty:
             pass
